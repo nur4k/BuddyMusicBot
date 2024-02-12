@@ -7,7 +7,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 # TOKEN = "6918510446:AAFiSzfiGsWabfPedJp5doqOqk7vVb0RUZs" Тестовый
-TOKEN = "6918510446:AAFiSzfiGsWabfPedJp5doqOqk7vVb0RUZs"
+TOKEN = "6314422330:AAHz7tpN9JhY_rbceF44oZ51yG7ZWYVZmB8"
 GROUP_CHAT_ID = "-1002024020063"
 
 bot = telebot.TeleBot(TOKEN)
@@ -45,7 +45,7 @@ users_data = load_users()
 
 def show_commands_keyboard(message):
     commands_keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-    commands_keyboard.add(search_button, listened_button)
+    commands_keyboard.add(search_button)
     bot.send_message(message.chat.id, "Выберите команду:", reply_markup=commands_keyboard)
 
 
@@ -61,64 +61,89 @@ def start(message):
     bot.send_message(user_id, "Привет! Чтобы продолжить, введите свое имя:")
     bot.register_next_step_handler(message, process_name_input)
 
+def process_search_input(message):
+    user_id = message.from_user.id
+    search_query = message.text.lower() 
+    user_data = users_data.get(user_id, {})
+    if len(search_query) < 4:
+        return
+    matching_songs = [f for f in songs if search_query in f.lower()]
+    if matching_songs:
+        result_message = f'Результаты поиска для "{search_query}"'
+        bot.reply_to(message, result_message)
+        first_matching_song = matching_songs[0]
+        audio_path = Path(audio_directory) / f"{first_matching_song}.mp3"
+        if audio_path.exists():
+            with open(audio_path, 'rb') as audio_file:
+                bot.send_audio(user_id, audio_file)
+                save_users(user_data)
+        else:
+            bot.reply_to(message, "Файл не найден.")
+    else:
+        bot.reply_to(message, f'По запросу "{search_query}" ничего не найдено.')
+    show_commands_keyboard(message)
+    
 
 @bot.message_handler(commands=['search'])
 def search(message):
     user_id = message.from_user.id
     user_data = users_data.get(user_id, {})
+
+    bot.send_message(user_id, "Введите запрос для поиска:")
+    bot.register_next_step_handler(message, process_search_input)
     
 
-def show_song_selection_inline_keyboard(user_id):
-    user_data = users_data.get(user_id, {})
-    listened_songs = user_data.get('listened_songs', [])
-    available_songs = [song_name for song_name in songs if song_name not in listened_songs]
-    inline_keyboard = types.InlineKeyboardMarkup(row_width=1)
-    for song_name in available_songs:
-        callback_data = f"select_song_{song_name}"
-        button = types.InlineKeyboardButton(text=song_name, callback_data=callback_data)
-        inline_keyboard.add(button)
-    song_list_text = "Доступные песни:"
-    bot.send_message(user_id, f"{song_list_text}", reply_markup=inline_keyboard)
-    user_data['state'] = 'select_song'
-    save_users(users_data)
+# def show_song_selection_inline_keyboard(user_id):
+#     user_data = users_data.get(user_id, {})
+#     listened_songs = user_data.get('listened_songs', [])
+#     available_songs = [song_name for song_name in songs if song_name not in listened_songs]
+#     inline_keyboard = types.InlineKeyboardMarkup(row_width=1)
+#     for song_name in available_songs:
+#         callback_data = f"select_song_{song_name}"
+#         button = types.InlineKeyboardButton(text=song_name, callback_data=callback_data)
+#         inline_keyboard.add(button)
+#     song_list_text = "Доступные песни:"
+#     bot.send_message(user_id, f"{song_list_text}", reply_markup=inline_keyboard)
+#     user_data['state'] = 'select_song'
+#     save_users(users_data)
 
-@bot.callback_query_handler(func=lambda call: users_data.get(call.from_user.id, {}).get('state') == 'select_song')
-def select_song_callback(call):
-    user_id = call.from_user.id
-    user_data = users_data.get(user_id, {})
-    try:
-        selected_song_name = call.data.split('_')[2]
-    except IndexError:
-        bot.send_message(user_id, "Некорректные данные выбора песни.")
-        return
+# @bot.callback_query_handler(func=lambda call: users_data.get(call.from_user.id, {}).get('state') == 'select_song')
+# def select_song_callback(call):
+#     user_id = call.from_user.id
+#     user_data = users_data.get(user_id, {})
+#     try:
+#         selected_song_name = call.data.split('_')[2]
+#     except IndexError:
+#         bot.send_message(user_id, "Некорректные данные выбора песни.")
+#         return
 
-    user_name = user_data.get('name', None)
-    user_data.setdefault('listened_songs', []).append(selected_song_name)
-    user_data['state'] = 'idle'
-    save_users(users_data)
+#     user_name = user_data.get('name', None)
+#     user_data.setdefault('listened_songs', []).append(selected_song_name)
+#     user_data['state'] = 'idle'
+#     save_users(users_data)
 
-    bot.send_message(user_id, f"{user_name}, вы выбрали песню: {selected_song_name}. Добавлена в список прослушанных.")
-    send_listened_songs_to_group(user_id, selected_song_name)
+#     bot.send_message(user_id, f"{user_name}, вы выбрали песню: {selected_song_name}. Добавлена в список прослушанных.")
+#     send_listened_songs_to_group(user_id, selected_song_name)
 
-    audio_path = Path(audio_directory) / f"{selected_song_name}.mp3"
-    if audio_path.exists():
-        with open(audio_path, 'rb') as audio_file:
-            bot.send_audio(user_id, audio_file)
-    else:
-        bot.send_message(user_id, "Файл не найден.")
+#     audio_path = Path(audio_directory) / f"{selected_song_name}.mp3"
+#     if audio_path.exists():
+#         with open(audio_path, 'rb') as audio_file:
+#             bot.send_audio(user_id, audio_file)
+#     else:
+#         bot.send_message(user_id, "Файл не найден.")
 
-    show_commands_keyboard(call.message)
+#     show_commands_keyboard(call.message)
 
-@bot.message_handler(commands=['play'])
-def play_song(message):
-    user_id = message.from_user.id
-    user_data = users_data.get(user_id, {})
-    try:
-        user_data['state'] = 'select_song'
-        save_users(users_data)
-        show_song_selection_inline_keyboard(user_id)
-    except Exception as e:
-        bot.reply_to(message, f"Произошла ошибка")
+# @bot.message_handler(commands=['play'])
+# def play_song(message):
+#     user_id = message.from_user.id
+#     user_data = users_data.get(user_id, {})
+#     try:
+#         user_data['state'] = 'select_song'
+#         save_users(users_data)
+#         show_song_selection_inline_keyboard(user_id)
+#     except Exception as e:
+#         bot.reply_to(message, f"Произошла ошибка")
 
 def send_listened_songs_to_group(user_id, song_title):
     group_chat_id = GROUP_CHAT_ID
