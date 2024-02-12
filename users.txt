@@ -1,0 +1,1 @@
+{1256077723: {'name': 'Nur', 'listened_songs': ['Rihanna – Diamonds'], 'state': 'idle'}}
